@@ -19,6 +19,7 @@ Features
 - Can fetch Proxy Granting Ticket
 - Supports Django 1.5, 1.6, 1.7 and 1.8 with `User custom model`_
 - Supports Python 2.7, 3.x
+- Integrated Python-cas (Local change)
 
 
 Installation
