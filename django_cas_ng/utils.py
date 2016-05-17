@@ -1,4 +1,4 @@
-from cas import CASClient
+from .cas import CASClient
 from django.conf import settings as django_settings
 from django.contrib.auth import REDIRECT_FIELD_NAME, SESSION_KEY, BACKEND_SESSION_KEY, load_backend
 from django.contrib.auth.models import AnonymousUser
@@ -72,3 +72,51 @@ def get_user_from_session(session):
         return backend.get_user(user_id) or AnonymousUser()
     except KeyError:
         return AnonymousUser()
+
+
+from django.core import urlresolvers
+from django.http import HttpResponseRedirect
+from django.utils.encoding import force_bytes
+import logging
+
+logger = logging.getLogger(__name__)
+# Support both Python 2 and Python 3 locations for urllib imports.
+try:
+    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+except ImportError:  # pragma: no cover
+    from urllib import urlencode
+    from urlparse import parse_qsl, urlparse, urlunparse
+
+def add_query_params(url, params):
+    """
+    Inject additional query parameters into an existing URL. If
+    parameters already exist with the same name, they will be
+    overwritten. Parameters with empty values are ignored. Return
+    the modified URL as a string.
+    """
+    def encode(s):
+        return force_bytes(s, django_settings.DEFAULT_CHARSET)
+    params = dict([(encode(k), encode(v)) for k, v in params.items() if v])
+
+    parts = list(urlparse(url))
+    query = dict(parse_qsl(parts[4]))
+    query.update(params)
+    parts[4] = urlencode(query)
+    return urlunparse(parts)
+
+def redirect(to, *args, **kwargs):
+    """
+    Similar to the Django ``redirect`` shortcut but with altered
+    functionality. If an optional ``params`` argument is provided, the
+    dictionary items will be injected as query parameters on the
+    redirection URL.
+    """
+    params = kwargs.pop('params', {})
+    if params:
+        to = add_query_params(to, params)
+
+    logger.debug("Redirecting to %s" % to)
+    return HttpResponseRedirect(to)
+
+
+

@@ -5,7 +5,7 @@ from .utils import (get_cas_client, get_service_url, get_user_from_session)
 
 
 from importlib import import_module
-from cas import CASError
+from .cas import CASError
 
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
 
@@ -15,8 +15,6 @@ class ProxyError(ValueError):
 
 
 class ProxyGrantingTicket(models.Model):
-    class Meta:
-        unique_together = ('session_key', 'user')
     session_key = models.CharField(max_length=255, blank=True, null=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -27,6 +25,9 @@ class ProxyGrantingTicket(models.Model):
     pgtiou = models.CharField(max_length=255, null=True, blank=True)
     pgt = models.CharField(max_length=255, null=True, blank=True)
     date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('session_key', 'user')
 
     @classmethod
     def clean_deleted_sessions(cls):
@@ -54,13 +55,28 @@ class ProxyGrantingTicket(models.Model):
             service_url = get_service_url(request)
             client = get_cas_client(service_url=service_url)
             try:
-                return client.get_proxy_ticket(pgt, service)
+                return client.get_proxy_ticket(pgt)
             # change CASError to ProxyError nicely
             except CASError as error:
                 raise ProxyError(*error.args)
             # juste embed other errors
             except Exception as e:
                 raise ProxyError(e)
+
+    def get_pt(self, target_service):
+
+        client = get_cas_client(service_url=target_service)
+        try:
+            return client.get_proxy_ticket(self.pgt)
+        # change CASError to ProxyError nicely
+        except CASError as error:
+            raise ProxyError(*error.args)
+        # just embed other errors
+        except Exception as e:
+            raise ProxyError(e)
+
+    def __str__(self):
+        return "%s %s session:%s user:%s" % (self.pgtiou, self.pgt, self.session_key, self.user)
 
 
 class SessionTicket(models.Model):

@@ -69,19 +69,13 @@ def login(request, next_page=None, required=False):
             )
 
             if pgtiou and settings.CAS_PROXY_CALLBACK:
-                # Delete old PGT
-                ProxyGrantingTicket.objects.filter(
-                    user=user,
-                    session_key=request.session.session_key
-                ).delete()
-                # Set new PGT ticket
-                try:
-                    pgt = ProxyGrantingTicket.objects.get(pgtiou=pgtiou)
+                pgt, created = ProxyGrantingTicket.objects.get_or_create(pgtiou=pgtiou,
+                                                defaults={'user': user,
+                                                          'session_key': request.session.session_key})
+                if not created:
                     pgt.user = user
                     pgt.session_key = request.session.session_key
                     pgt.save()
-                except ProxyGrantingTicket.DoesNotExist:
-                    pass
 
             if settings.CAS_LOGIN_MSG is not None:
                 name = user.get_username()
@@ -139,15 +133,19 @@ def callback(request):
     if request.method == 'POST' and request.POST.get('logoutRequest'):
         clean_sessions(get_cas_client(), request)
         return HttpResponse("{0}\n".format(_('ok')), content_type="text/plain")
+
     elif request.method == 'GET':
         pgtid = request.GET.get('pgtId')
         pgtiou = request.GET.get('pgtIou')
-        pgt = ProxyGrantingTicket.objects.create(pgtiou=pgtiou, pgt=pgtid)
-        pgt.save()
+        pgt, created = ProxyGrantingTicket.objects.get_or_create(pgtiou=pgtiou, defaults={'pgt':pgtid})
+        if not created:
+            pgt.pgt = pgtid
+            pgt.save(update_fields=['pgt'])
         ProxyGrantingTicket.objects.filter(
             session_key=None,
             date__lt=(timezone.now() - timedelta(seconds=60))
         ).delete()
+        
         return HttpResponse("{0}\n".format(_('ok')), content_type="text/plain")
 
 
